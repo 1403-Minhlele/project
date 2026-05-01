@@ -14,7 +14,7 @@ export default function App() {
   const [selectedWriteup, setSelectedWriteup] = useState(null);
 
   useEffect(() => {
-    fetch('[https://my-backend-xyz.onrender.com/api/writeups](https://my-backend-xyz.onrender.com/api/writeups)')
+    fetch('[https://project-3g8c.onrender.com/api/writeups](https://project-3g8c.onrender.com/api/writeups)')
       .then(res => res.json())
       .then(data => {
         setWriteups(data);
