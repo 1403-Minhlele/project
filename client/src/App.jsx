@@ -395,28 +395,58 @@ const AdminPanel = ({ onAdd }) => {
   );
 };
 
+// --- 5. FORM LIÊN HỆ (BẮN THẲNG VỀ EMAIL) ---
 const SecureContact = () => {
   const [formData, setFormData] = useState({ email: '', message: '' });
   const [status, setStatus] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    fetch('http://localhost:5000/api/contact', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData)
-    })
-    .then(res => res.json())
-    .then(data => { setStatus(data.message); setFormData({ email: '', message: '' }); setTimeout(() => setStatus(''), 5000); });
+    setStatus('ĐANG TRUYỀN DỮ LIỆU ĐẾN MỤC TIÊU...');
+
+    // Đóng gói dữ liệu theo chuẩn của Web3Forms
+    const payload = {
+        access_key: "56275818-1600-487e-bb39-ab2be95edf94", // <-- SỬA DÒNG NÀY
+        subject: "🚨 [Vibe Hacker] Có tin nhắn mới từ Portfolio!",
+        email: formData.email,
+        message: formData.message
+    };
+
+    try {
+        const res = await fetch('https://api.web3forms.com/submit', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+            setStatus('PAYLOAD DELIVERED. CHECK YOUR INBOX.');
+            setFormData({ email: '', message: '' });
+        } else {
+            setStatus('LỖI ĐƯỜNG TRUYỀN: TỪ CHỐI KẾT NỐI.');
+        }
+    } catch (error) {
+        setStatus('LỖI KẾT NỐI MẠNG.');
+    }
+
+    // Tự động xóa dòng thông báo sau 5 giây
+    setTimeout(() => setStatus(''), 5000);
   };
 
   return (
-    <section className="py-24 bg-slate-900 border-t border-slate-800">
+    <section className="py-24 bg-slate-950 border-t border-slate-900">
       <div className="max-w-3xl mx-auto px-6">
-        <h2 className="text-2xl font-bold text-emerald-400 mb-6 flex items-center gap-2"><Terminal /> ./secure_contact.sh</h2>
-        <form onSubmit={handleSubmit} className="bg-slate-950 p-6 rounded-lg border border-slate-800 space-y-4">
-          <input required type="email" placeholder="Email của bạn..." className="w-full bg-slate-900 p-3 rounded text-emerald-400 border border-slate-800 outline-none focus:border-emerald-500" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-          <textarea required rows="3" placeholder="Nội dung (Payload)..." className="w-full bg-slate-900 p-3 rounded text-emerald-400 border border-slate-800 outline-none focus:border-emerald-500" value={formData.message} onChange={e => setFormData({...formData, message: e.target.value})}></textarea>
-          <button className="w-full p-3 bg-emerald-500/20 text-emerald-400 rounded font-bold border border-emerald-500/50 hover:bg-emerald-500/30 transition-colors">FIRE PAYLOAD</button>
-          {status && <p className="text-emerald-500 text-center">{status}</p>}
+        <h2 className="text-xl font-bold text-emerald-400 mb-6 font-mono flex items-center gap-2"><Terminal size={18}/> ./send_payload.sh</h2>
+        <form onSubmit={handleSubmit} className="bg-slate-900/40 p-8 rounded-lg border border-slate-800 shadow-2xl space-y-6">
+          <input required type="email" placeholder="Email Source" className="w-full bg-slate-950 p-4 rounded text-emerald-400 border border-slate-800 focus:border-emerald-500 outline-none transition-colors" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+          <textarea required rows="4" placeholder="Encrypted Message..." className="w-full bg-slate-950 p-4 rounded text-emerald-400 border border-slate-800 focus:border-emerald-500 outline-none transition-colors" value={formData.message} onChange={e => setFormData({...formData, message: e.target.value})}></textarea>
+          <button className="w-full p-4 bg-emerald-500/10 text-emerald-400 rounded-lg font-bold border border-emerald-500/30 hover:bg-emerald-500/20 transition-all uppercase tracking-widest">Transmit Data</button>
+          {status && <p className="text-emerald-500 text-center font-mono text-sm uppercase">{status}</p>}
         </form>
       </div>
     </section>
