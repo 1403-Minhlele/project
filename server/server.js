@@ -1,60 +1,84 @@
-require('dotenv').config(); // [MỚI] Load mật khẩu từ file .env
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const mongoose = require('mongoose'); // [MỚI] Thư viện MongoDB
-const helmet = require('helmet'); 
-const rateLimit = require('express-rate-limit');
-const { handleSecureContact } = require('./contactHandler');
-const Writeup = require('./models/Writeup'); // [MỚI] Nhập khuôn mẫu dữ liệu
+const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken'); // Thư viện tạo thẻ VIP
 
 const app = express();
-
-// --- BẢO MẬT ---
-app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-const contactLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5 });
+// 1. KẾT NỐI MONGODB 
+// (Lưu ý: Đảm bảo biến trên Render của bạn tên là MONGODB_URI hoặc MONGO_URI nhé)
+const dbURI = process.env.MONGODB_URI || process.env.MONGO_URI;
+mongoose.connect(dbURI)
+    .then(() => console.log('=> DATABASE CONNECTED: [MONGODB ATLAS]'))
+    .catch(err => console.error('=> DATABASE ERROR:', err));
 
-// --- [MỚI] KẾT NỐI MONGODB ---
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("🟢 ĐÃ KẾT NỐI THÀNH CÔNG TỚI MONGODB CLOUD!"))
-    .catch((err) => console.error("🔴 LỖI KẾT NỐI MONGODB:", err));
+// 2. ĐỊNH NGHĨA MODEL TRỰC TIẾP
+const Writeup = mongoose.model('Writeup', new mongoose.Schema({
+    title: { type: String, required: true },
+    link: { type: String, required: true },
+    type: { type: String, required: true },
+    tags: [String],
+    date: { type: String, required: true }
+}));
 
 // ==========================================
-// API 1: LẤY DỮ LIỆU TỪ MONGODB (GET)
+// [ĐÃ BỔ SUNG] 2.5 API LẤY DANH SÁCH BÀI VIẾT (Dành cho trang chủ)
 // ==========================================
 app.get('/api/writeups', async (req, res) => {
     try {
-        // Tìm tất cả bài viết, sắp xếp theo thời gian mới nhất
-        const writeups = await Writeup.find().sort({ createdAt: -1 });
+        // Lấy toàn bộ bài viết, .sort({ _id: -1 }) để đẩy bài mới nhất lên đầu tiên
+        const writeups = await Writeup.find().sort({ _id: -1 });
         res.status(200).json(writeups);
-    } catch (err) {
-        res.status(500).json({ error: "Lỗi kéo dữ liệu từ DB" });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
 });
 
-// ==========================================
-// API 2: LƯU BÀI VIẾT MỚI VÀO MONGODB (POST)
-// ==========================================
-app.post('/api/writeups', async (req, res) => {
+// 3. API ĐĂNG NHẬP (CẤP TOKEN)
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
+    // So sánh với cấu hình trên Render
+    if (username === process.env.ADMIN_USER && password === process.env.ADMIN_PASS) {
+        // Cấp Token có thời hạn 12 giờ
+        const token = jwt.sign({ role: 'admin' }, process.env.JWT_SECRET, { expiresIn: '12h' });
+        res.json({ success: true, token });
+    } else {
+        res.status(401).json({ success: false, message: "Invalid credentials" });
+    }
+});
+
+// 4. MÁY QUÉT BẢO VỆ (MIDDLEWARE)
+const verifyAdmin = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Lấy phần <token> sau chữ Bearer
+    
+    if (!token) return res.status(401).json({ error: "Unauthorized" });
+
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+        if (err) return res.status(403).json({ error: "Forbidden - Token giả mạo hoặc hết hạn" });
+        req.user = user;
+        next(); // Hợp lệ -> Cho đi tiếp vào Database
+    });
+};
+
+// 5. ÁP DỤNG BẢO VỆ VÀO API THÊM BÀI
+app.post('/api/writeups', verifyAdmin, async (req, res) => {
     try {
-        // Tạo một bài viết mới dựa trên dữ liệu React gửi lên
-        const newWriteup = new Writeup(req.body);
-        
-        // Lưu thẳng lên MongoDB Cloud
-        await newWriteup.save(); 
-        
-        res.status(201).json({ message: "Đã lưu vĩnh viễn vào MongoDB!" });
-    } catch (err) {
-        res.status(500).json({ error: "Lỗi lưu dữ liệu" });
+        const newWu = new Writeup(req.body);
+        await newWu.save();
+        res.status(201).json(newWu);
+    } catch (e) { 
+        res.status(500).json({ error: e.message }); 
     }
 });
 
-// --- API LIÊN HỆ ---
-app.post('/api/contact', contactLimiter, handleSecureContact);
-
+// ==========================================
+// [ĐÃ BỔ SUNG] 6. KHỞI ĐỘNG SERVER
+// ==========================================
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-    console.log(`=> BACKEND SERVER ĐANG CHẠY TẠI CỔNG ${PORT}`);
+    console.log(`=> BACKEND SERVER IS RUNNING ON PORT ${PORT}`);
 });

@@ -206,19 +206,17 @@ const WriteupReader = ({ wu, onBack }) => {
 };
 
 
-// --- [MỚI] HIỆU ỨNG GÕ PHÍM (TYPEWRITER COMPONENT) ---
+// --- HIỆU ỨNG GÕ PHÍM ---
 const TypewriterText = ({ text, delay = 0, speed = 40 }) => {
   const [displayedText, setDisplayedText] = useState('');
   const [isStarted, setIsStarted] = useState(false);
   const [isDone, setIsDone] = useState(false);
 
-  // Đợi một khoảng thời gian (delay) rồi mới bắt đầu gõ
   useEffect(() => {
     const timer = setTimeout(() => setIsStarted(true), delay);
     return () => clearTimeout(timer);
   }, [delay]);
 
-  // Logic gõ từng chữ cái
   useEffect(() => {
     if (!isStarted) return;
     
@@ -228,7 +226,7 @@ const TypewriterText = ({ text, delay = 0, speed = 40 }) => {
       i++;
       if (i === text.length) {
         clearInterval(intervalId);
-        setIsDone(true); // Gõ xong thì đổi trạng thái
+        setIsDone(true);
       }
     }, speed);
 
@@ -238,14 +236,13 @@ const TypewriterText = ({ text, delay = 0, speed = 40 }) => {
   return (
     <span>
       {displayedText}
-      {/* Con trỏ nhấp nháy, nếu gõ xong rồi thì vẫn nhấp nháy để tạo cảm giác Terminal đang chạy */}
       <span className={`${isDone ? 'animate-pulse text-emerald-400' : 'text-emerald-400'}`}>_</span>
     </span>
   );
 };
 
 
-// --- CÁC COMPONENT CŨ GIỮ NGUYÊN ĐÃ ĐƯỢC CẬP NHẬT GIAO DIỆN HERO ---
+// --- HERO SECTION ---
 const Hero = () => (
   <section className="pt-32 pb-20 px-6 border-b border-slate-900 bg-slate-950">
     <div className="max-w-7xl mx-auto text-center">
@@ -253,15 +250,10 @@ const Hero = () => (
       <h1 className="text-5xl font-bold text-white mb-4">Lê Vũ Khánh Minh</h1>
       <h2 className="text-xl font-mono text-emerald-400 mb-8">Security Researcher</h2>
       
-      {/* KHU VỰC CHỨA CHỮ ĐÁNH MÁY */}
       <div className="max-w-4xl mx-auto text-center bg-slate-900/80 p-6 rounded-lg border border-emerald-800 shadow-[0_0_30px_rgba(16,185,129,0.3)] space-y-4">
-        
-        {/* Dòng 1: Gõ ngay lập tức */}
         <p className="text-lg font-mono text-emerald-400">
           <TypewriterText text="Hi, I am from ATTT2025.2, University of Information Technology, VNU.HCM" speed={40} delay={0} />
         </p>
-
-        {/* Dòng 2: Chờ dòng 1 gõ xong (khoảng 3500ms) rồi mới bắt đầu gõ tiếp */}
         <p className="text-base font-mono text-slate-300">
           <TypewriterText 
             text="This website is my 'vibe code' web development project aimed at learning about webdev, security vulnerabilities, and uploading CTF write-ups." 
@@ -270,11 +262,11 @@ const Hero = () => (
           />
         </p>
       </div>
-      
     </div>
   </section>
 );
 
+// --- DANH SÁCH BÀI VIẾT ---
 const WriteupsList = ({ writeups, isLoading, onView }) => (
   <section className="py-24 bg-slate-900 border-t border-slate-800">
     <div className="max-w-5xl mx-auto px-6">
@@ -308,94 +300,152 @@ const WriteupsList = ({ writeups, isLoading, onView }) => (
   </section>
 );
 
+// --- BẢNG QUẢN TRỊ VIÊN (SUDO ROOT LOGIN) ---
 const AdminPanel = ({ onAdd }) => {
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('adminToken'));
   const [loginData, setLoginData] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState('');
-  const [newWu, setNewWu] = useState({ title: '', link: '', type: 'HackMD', tagsStr: '' });
+  const [isAuthenticating, setIsAuthenticating] = useState(false); // Trạng thái đang tải
+  const [loginSuccessMsg, setLoginSuccessMsg] = useState(''); // Trạng thái đăng nhập thành công
+  
+  const [newWu, setNewWu] = useState({ title: '', link: '', type: 'GITHUB', tagsStr: '' });
   const [status, setStatus] = useState('');
 
+  // 1. XỬ LÝ ĐĂNG NHẬP CÓ HIỆU ỨNG
   const handleLogin = (e) => {
     e.preventDefault();
-    fetch('http://localhost:5000/api/login', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginData)
+    setIsAuthenticating(true); // Bật hiệu ứng loading
+    setLoginError('');
+
+    fetch('https://project-3g8c.onrender.com/api/login', { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify(loginData)
     })
     .then(res => res.json())
     .then(data => {
-      if (data.success) {
-        localStorage.setItem('adminToken', data.token); setIsLoggedIn(true); setLoginError('');
-      } else { setLoginError('Sai tài khoản hoặc mật khẩu!'); }
+      if (data.success) { 
+        localStorage.setItem('adminToken', data.token);
+        
+        // Hiện thông báo thành công màu xanh lá
+        setLoginSuccessMsg('[+] ACCESS GRANTED. INITIALIZING DASHBOARD...');
+        setIsAuthenticating(false);
+
+        // Đợi 1.5 giây để người dùng đọc dòng chữ ngầu lòi rồi mới chuyển trang
+        setTimeout(() => {
+            setIsLoggedIn(true); 
+            setLoginSuccessMsg(''); 
+            setLoginData({ username: '', password: '' }); // Xóa trắng form cũ
+        }, 1500);
+
+      } else { 
+        setIsAuthenticating(false);
+        setLoginError('[-] ACCESS DENIED: WRONG CREDENTIALS'); 
+      }
+    })
+    .catch(err => {
+        setIsAuthenticating(false);
+        setLoginError('[-] FATAL ERROR: SERVER DISCONNECTED');
     });
   };
 
-  const handleLogout = () => { localStorage.removeItem('adminToken'); setIsLoggedIn(false); };
+  const handleLogout = () => { 
+    localStorage.removeItem('adminToken');
+    setIsLoggedIn(false); 
+  };
 
   const handleAdd = (e) => {
     e.preventDefault();
     const tagsArray = newWu.tagsStr.split(',').map(t => t.trim()).filter(t => t);
-    const payload = {
-      title: newWu.title, link: newWu.link, type: newWu.type,
-      tags: tagsArray.length ? tagsArray : ['Uncategorized'],
-      date: new Date().toLocaleDateString('vi-VN')
-    };
-    
+    const payload = { ...newWu, tags: tagsArray.length ? tagsArray : ['General'], date: new Date().toLocaleDateString() };
     const token = localStorage.getItem('adminToken');
 
-    fetch('http://localhost:5000/api/writeups', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    fetch('https://project-3g8c.onrender.com/api/writeups', { 
+      method: 'POST', 
+      headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${token}` 
+      }, 
       body: JSON.stringify(payload)
     })
-    .then(res => { if(res.status === 403) throw new Error("Hết phiên đăng nhập!"); return res.json(); })
-    .then(data => {
-      onAdd(payload); setStatus('DB Inserted Successfully!');
-      setNewWu({ title: '', link: '', type: 'HackMD', tagsStr: '' });
-      setTimeout(() => setStatus(''), 3000);
-    })
-    .catch(err => { alert(err.message); handleLogout(); });
+    .then(res => res.json())
+    .then(data => { 
+        onAdd(data); 
+        setStatus('DB UPDATED SUCCESSFULLY'); 
+        setNewWu({ title: '', link: '', type: 'GITHUB', tagsStr: '' }); 
+        setTimeout(() => setStatus(''), 3000); 
+    });
   };
 
+  // --- GIAO DIỆN CHƯA ĐĂNG NHẬP (FORM LOGIN) ---
   if (!isLoggedIn) {
     return (
       <section id="admin" className="py-24 bg-slate-950 border-t border-slate-800">
         <div className="max-w-md mx-auto px-6">
           <h2 className="text-2xl font-bold text-rose-500 mb-6 flex items-center gap-2 justify-center"><Key /> SUDO ROOT LOGIN</h2>
-          <form onSubmit={handleLogin} className="bg-slate-900 p-6 rounded-lg border border-rose-900/50 space-y-4 shadow-2xl">
-            <input required type="text" placeholder="Username" className="w-full bg-slate-950 p-3 rounded text-white outline-none focus:border-rose-500 border border-slate-800" value={loginData.username} onChange={e => setLoginData({...loginData, username: e.target.value})} />
-            <input required type="password" placeholder="Password" className="w-full bg-slate-950 p-3 rounded text-white outline-none focus:border-rose-500 border border-slate-800" value={loginData.password} onChange={e => setLoginData({...loginData, password: e.target.value})} />
-            <button className="w-full p-3 bg-rose-500/20 text-rose-400 rounded font-bold hover:bg-rose-500/30 transition-colors">AUTHENTICATE</button>
-            {loginError && <p className="text-rose-500 text-center text-sm">{loginError}</p>}
+          
+          {/* Form sẽ chớp đỏ nếu có lỗi */}
+          <form onSubmit={handleLogin} className={`bg-slate-900 p-6 rounded-lg border ${loginError ? 'border-rose-500 animate-pulse' : 'border-rose-900/50'} space-y-4 shadow-2xl transition-colors`}>
+            
+            <input required disabled={isAuthenticating || loginSuccessMsg} type="text" placeholder="Username" className="w-full bg-slate-950 p-3 rounded text-white outline-none focus:border-rose-500 border border-slate-800 disabled:opacity-50" value={loginData.username} onChange={e => setLoginData({...loginData, username: e.target.value})} />
+            <input required disabled={isAuthenticating || loginSuccessMsg} type="password" placeholder="Password" className="w-full bg-slate-950 p-3 rounded text-white outline-none focus:border-rose-500 border border-slate-800 disabled:opacity-50" value={loginData.password} onChange={e => setLoginData({...loginData, password: e.target.value})} />
+            
+            <button disabled={isAuthenticating || loginSuccessMsg} className="w-full p-3 bg-rose-500/20 text-rose-400 rounded font-bold hover:bg-rose-500/30 transition-colors disabled:opacity-50 flex justify-center items-center gap-2">
+              {isAuthenticating ? <><Loader2 className="animate-spin" size={18}/> AUTHENTICATING...</> : 'AUTHENTICATE'}
+            </button>
+
+            {/* Khung thông báo lỗi (Màu Đỏ) */}
+            {loginError && (
+                <div className="bg-rose-950/50 border border-rose-500/50 p-3 rounded flex items-center gap-2 text-rose-500 font-mono text-sm">
+                    <AlertTriangle size={16} /> {loginError}
+                </div>
+            )}
+
+            {/* Khung thông báo thành công (Màu Xanh) */}
+            {loginSuccessMsg && (
+                <div className="bg-emerald-950/50 border border-emerald-500/50 p-3 rounded flex items-center gap-2 text-emerald-500 font-mono text-sm animate-pulse">
+                    <Unlock size={16} /> {loginSuccessMsg}
+                </div>
+            )}
           </form>
         </div>
       </section>
     );
   }
 
+  // --- GIAO DIỆN ĐÃ ĐĂNG NHẬP (DASHBOARD) ---
   return (
-    <section id="admin" className="py-24 bg-slate-950 border-t border-slate-800">
-      <div className="max-w-3xl mx-auto px-6">
-        <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-emerald-400 flex items-center gap-2"><Lock/> Admin Panel (Authenticated)</h2>
-            <button onClick={handleLogout} className="flex items-center gap-2 text-rose-500 text-sm hover:underline"><LogOut size={16}/> Logout</button>
+    <section id="admin" className="py-24 bg-slate-950 border-t border-slate-800 relative overflow-hidden">
+      {/* Thêm hiệu ứng lưới nền nhấp nháy cho ngầu */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#10b9811a_1px,transparent_1px),linear-gradient(to_bottom,#10b9811a_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none opacity-20"></div>
+
+      <div className="max-w-3xl mx-auto px-6 relative z-10">
+        <div className="flex items-center justify-between mb-6 border-b border-emerald-900/50 pb-4">
+            <div>
+                <h2 className="text-2xl font-bold text-emerald-400 flex items-center gap-2"><Lock/> SYSTEM OVERRIDE</h2>
+                <p className="text-emerald-500/70 font-mono text-sm mt-1">Welcome back, Administrator.</p>
+            </div>
+            <button onClick={handleLogout} className="flex items-center gap-2 px-4 py-2 bg-rose-500/10 text-rose-500 rounded border border-rose-500/30 text-sm hover:bg-rose-500/20 transition-colors"><LogOut size={16}/> Disconnect</button>
         </div>
-        <form onSubmit={handleAdd} className="bg-slate-900 p-6 rounded-lg border border-emerald-900/50 space-y-4">
-          <input required type="text" placeholder="Tiêu đề..." className="w-full bg-slate-950 border border-slate-800 p-3 rounded text-white" value={newWu.title} onChange={e => setNewWu({...newWu, title: e.target.value})} />
+
+        <form onSubmit={handleAdd} className="bg-slate-900 p-6 rounded-lg border border-emerald-500/30 space-y-4 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+          <input required type="text" placeholder="Entry Title..." className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 p-3 rounded text-white outline-none transition-colors" value={newWu.title} onChange={e => setNewWu({...newWu, title: e.target.value})} />
           <div className="flex gap-4">
-            <input required type="text" placeholder="Link (Bắt đầu bằng https://)..." className="w-full bg-slate-950 border border-slate-800 p-3 rounded text-white" value={newWu.link} onChange={e => setNewWu({...newWu, link: e.target.value})} />
-            <select className="bg-slate-950 border border-slate-800 p-3 rounded text-white" value={newWu.type} onChange={e => setNewWu({...newWu, type: e.target.value})}>
+            <input required type="text" placeholder="Target Link (https://)..." className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 p-3 rounded text-white outline-none transition-colors" value={newWu.link} onChange={e => setNewWu({...newWu, link: e.target.value})} />
+            <select className="bg-slate-950 border border-slate-800 focus:border-emerald-500 p-3 rounded text-white outline-none" value={newWu.type} onChange={e => setNewWu({...newWu, type: e.target.value})}>
               <option>Github / HackMD</option><option>Markdown</option>
             </select>
           </div>
-          <input type="text" placeholder="Tags (Cach nhau dau phay)" className="w-full bg-slate-950 border border-slate-800 p-3 rounded text-white" value={newWu.tagsStr} onChange={e => setNewWu({...newWu, tagsStr: e.target.value})} />
-          <button className="w-full p-3 bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 rounded font-bold hover:bg-emerald-500/30 transition-colors">INSERT RECORD TO DATABASE</button>
-          {status && <p className="text-emerald-500 text-center animate-pulse">{status}</p>}
+          <input type="text" placeholder="Tags (Cách nhau dấu phẩy)" className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 p-3 rounded text-white outline-none transition-colors" value={newWu.tagsStr} onChange={e => setNewWu({...newWu, tagsStr: e.target.value})} />
+          <button className="w-full p-4 bg-emerald-500/10 text-emerald-400 border border-emerald-500/50 rounded font-bold hover:bg-emerald-500/20 transition-colors uppercase tracking-widest flex justify-center items-center gap-2"><Database size={18}/> Inject Record</button>
+          {status && <p className="text-emerald-500 text-center font-mono animate-pulse bg-emerald-500/10 p-2 rounded">{status}</p>}
         </form>
       </div>
     </section>
   );
 };
 
-// --- 5. FORM LIÊN HỆ (BẮN THẲNG VỀ EMAIL) ---
+// --- GỬI MAIL (WEB3FORMS) ---
 const SecureContact = () => {
   const [formData, setFormData] = useState({ email: '', message: '' });
   const [status, setStatus] = useState('');
@@ -404,9 +454,8 @@ const SecureContact = () => {
     e.preventDefault();
     setStatus('ĐANG TRUYỀN DỮ LIỆU ĐẾN MỤC TIÊU...');
 
-    // Đóng gói dữ liệu theo chuẩn của Web3Forms
     const payload = {
-        access_key: "56275818-1600-487e-bb39-ab2be95edf94", // <-- SỬA DÒNG NÀY
+        access_key: "56275818-1600-487e-bb39-ab2be95edf94",
         subject: "🚨 [Vibe Hacker] Có tin nhắn mới từ Portfolio!",
         email: formData.email,
         message: formData.message
@@ -434,7 +483,6 @@ const SecureContact = () => {
         setStatus('LỖI KẾT NỐI MẠNG.');
     }
 
-    // Tự động xóa dòng thông báo sau 5 giây
     setTimeout(() => setStatus(''), 5000);
   };
 
