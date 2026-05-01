@@ -382,7 +382,7 @@ const AdminPanel = ({ onAdd }) => {
     return (
       <section id="admin" className="py-24 bg-slate-950 border-t border-slate-800">
         <div className="max-w-md mx-auto px-6">
-          <h2 className="text-2xl font-bold text-rose-500 mb-6 flex items-center gap-2 justify-center"><Key /> SUDO ROOT LOGIN</h2>
+          <h2 className="text-2xl font-bold text-rose-500 mb-6 flex items-center gap-2 justify-center"><Key /> Admin Dashboard</h2>
           
           {/* Form sẽ chớp đỏ nếu có lỗi */}
           <form onSubmit={handleLogin} className={`bg-slate-900 p-6 rounded-lg border ${loginError ? 'border-rose-500 animate-pulse' : 'border-rose-900/50'} space-y-4 shadow-2xl transition-colors`}>
