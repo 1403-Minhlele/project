@@ -452,17 +452,29 @@ const SecureContact = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // --- LỚP BẢO VỆ MỚI: CHECK GMAIL CHÍNH CHỦ ---
+    const gmailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
+    
+    if (!gmailRegex.test(formData.email)) {
+      setStatus('[-] LỖI: HỆ THỐNG CHỈ CHẤP NHẬN ĐỊA CHỈ @GMAIL.COM');
+      // Tự động xóa thông báo lỗi sau 3 giây
+      setTimeout(() => setStatus(''), 3000);
+      return; // Dừng việc gửi form ngay lập tức
+    }
+    // --------------------------------------------
+
     setStatus('ĐANG TRUYỀN DỮ LIỆU ĐẾN MỤC TIÊU...');
 
     const payload = {
-        access_key: "56275818-1600-487e-bb39-ab2be95edf94",
-        subject: "🚨 [Vibe Hacker] Có tin nhắn mới từ Portfolio!",
+        access_key: "56275818-1600-487e-bb39-ab2be95edf94", //
+        subject: "🚨 Có tin nhắn mới từ Portfolio!",
         email: formData.email,
         message: formData.message
     };
 
     try {
-        const res = await fetch('https://api.web3forms.com/submit', {
+        const res = await fetch('https://api.web3forms.com/submit', { //
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -489,12 +501,36 @@ const SecureContact = () => {
   return (
     <section className="py-24 bg-slate-950 border-t border-slate-900">
       <div className="max-w-3xl mx-auto px-6">
-        <h2 className="text-xl font-bold text-emerald-400 mb-6 font-mono flex items-center gap-2"><Terminal size={18}/> ./send_payload.sh</h2>
+        <h2 className="text-xl font-bold text-emerald-400 mb-6 font-mono flex items-center gap-2">
+          <Terminal size={18}/> ./send_payload.sh
+        </h2>
         <form onSubmit={handleSubmit} className="bg-slate-900/40 p-8 rounded-lg border border-slate-800 shadow-2xl space-y-6">
-          <input required type="email" placeholder="Email Source" className="w-full bg-slate-950 p-4 rounded text-emerald-400 border border-slate-800 focus:border-emerald-500 outline-none transition-colors" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-          <textarea required rows="4" placeholder="Encrypted Message..." className="w-full bg-slate-950 p-4 rounded text-emerald-400 border border-slate-800 focus:border-emerald-500 outline-none transition-colors" value={formData.message} onChange={e => setFormData({...formData, message: e.target.value})}></textarea>
-          <button className="w-full p-4 bg-emerald-500/10 text-emerald-400 rounded-lg font-bold border border-emerald-500/30 hover:bg-emerald-500/20 transition-all uppercase tracking-widest">Transmit Data</button>
-          {status && <p className="text-emerald-500 text-center font-mono text-sm uppercase">{status}</p>}
+          <input 
+            required 
+            type="email" 
+            placeholder="example@gmail.com (Gmail only)" 
+            className="w-full bg-slate-950 p-4 rounded text-emerald-400 border border-slate-800 focus:border-emerald-500 outline-none transition-colors" 
+            value={formData.email} 
+            onChange={e => setFormData({...formData, email: e.target.value})} 
+          />
+          <textarea 
+            required 
+            rows="4" 
+            placeholder="Your Message..." 
+            className="w-full bg-slate-950 p-4 rounded text-emerald-400 border border-slate-800 focus:border-emerald-500 outline-none transition-colors" 
+            value={formData.message} 
+            onChange={e => setFormData({...formData, message: e.target.value})}
+          ></textarea>
+          <button className="w-full p-4 bg-emerald-500/10 text-emerald-400 rounded-lg font-bold border border-emerald-500/30 hover:bg-emerald-500/20 transition-all uppercase tracking-widest">
+            Transmit Data
+          </button>
+          
+          {/* Thông báo lỗi sẽ hiện đỏ, thông báo thành công hiện xanh */}
+          {status && (
+            <p className={`text-center font-mono text-sm uppercase ${status.includes('LỖI') ? 'text-rose-500' : 'text-emerald-500'}`}>
+              {status}
+            </p>
+          )}
         </form>
       </div>
     </section>
