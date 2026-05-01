@@ -423,7 +423,7 @@ const AdminPanel = ({ onAdd }) => {
         <div className="flex items-center justify-between mb-6 border-b border-emerald-900/50 pb-4">
             <div>
                 <h2 className="text-2xl font-bold text-emerald-400 flex items-center gap-2"><Lock/> SYSTEM OVERRIDE</h2>
-                <TypewriterText>Welcomback Administrator</TypewriterText>
+                <TypewriterText text="Welcome back, Administrator." speed={30} delay={3500} />
             </div>
             <button onClick={handleLogout} className="flex items-center gap-2 px-4 py-2 bg-rose-500/10 text-rose-500 rounded border border-rose-500/30 text-sm hover:bg-rose-500/20 transition-colors"><LogOut size={16}/> Disconnect</button>
         </div>
