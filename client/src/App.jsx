@@ -12,9 +12,10 @@ export default function App() {
   const [writeups, setWriteups] = useState([]);
   const [isLoadingDB, setIsLoadingDB] = useState(true);
   const [selectedWriteup, setSelectedWriteup] = useState(null);
-
-  // Trạng thái mới: Xác định xem có đang mở màn hình Admin hay không
   const [showAdmin, setShowAdmin] = useState(false);
+  
+  // NÂNG CẤP: Đưa trạng thái của Explorer lên App để đồng bộ với URL
+  const [explorerView, setExplorerView] = useState('menu');
 
   useEffect(() => {
     fetch('https://project-3g8c.onrender.com/api/writeups', { cache: 'no-store' })
@@ -25,26 +26,64 @@ export default function App() {
       })
       .catch(err => console.error("Lỗi lấy dữ liệu:", err));
   }, []);
-  const handleAddNewWriteup = (newWriteup) => {
-    setWriteups([newWriteup, ...writeups]);
+
+  // --- HÀM ĐIỀU HƯỚNG CHUẨN ---
+  const navigate = (path, action) => {
+    if (window.location.pathname !== path) {
+      window.history.pushState({ path }, '', path);
+    }
+    action();
   };
+
+  // --- XỬ LÝ NÚT BACK/FORWARD (FIXED) ---
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname;
+
+      // 1. Nếu là đường dẫn Admin
+      if (path === '/admin') {
+        setShowAdmin(true);
+        setSelectedWriteup(null);
+      } 
+      // 2. Nếu là các đường dẫn trong Explore Hub
+      else if (['/writeups', '/research', '/contact'].includes(path)) {
+        setShowAdmin(false);
+        setSelectedWriteup(null);
+        setExplorerView(path.replace('/', ''));
+      } 
+      // 3. Nếu đang đọc bài viết
+      else if (path === '/reading') {
+        // Nếu nhấn back/forward mà mất dữ liệu bài viết (do F5 hoặc lỗi state) thì về danh sách
+        if (!selectedWriteup) {
+          window.history.replaceState(null, '', '/writeups');
+          setExplorerView('writeups');
+        }
+      } 
+      // 4. Mặc định về Trang chủ
+      else {
+        setShowAdmin(false);
+        setSelectedWriteup(null);
+        setExplorerView('menu');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [selectedWriteup]); // Lắng nghe selectedWriteup để tránh lỗi mất data khi back
 
   return (
     <div className="bg-slate-950 min-h-screen font-sans selection:bg-emerald-500/30 text-slate-300 overflow-x-hidden">
-      {/* THANH ĐIỀU HƯỚNG (NAVBAR) ĐÃ ĐƯỢC CẬP NHẬT */}
       <nav className="fixed w-full z-50 bg-slate-950/90 backdrop-blur-md py-4 border-b border-emerald-900/50 shadow-lg shadow-emerald-900/20">
         <div className="max-w-7xl mx-auto px-4 md:px-6 flex justify-between items-center">
-          {/* Nút Logo: Bấm vào sẽ reset mọi thứ về trang chủ */}
           <button
-            onClick={() => { setSelectedWriteup(null); setShowAdmin(false); }}
+            onClick={() => navigate('/', () => { setSelectedWriteup(null); setShowAdmin(false); setExplorerView('menu'); })}
             className="text-xl md:text-2xl font-bold font-mono flex items-center gap-2 text-white hover:text-emerald-400 transition-colors"
           >
             <Terminal className="text-emerald-400" /> Krinoa<span className="text-emerald-400 animate-pulse">_</span>
           </button>
 
-          {/* Nút Login nằm góc phải Navbar */}
           <button
-            onClick={() => { setSelectedWriteup(null); setShowAdmin(!showAdmin); }}
+            onClick={() => navigate(showAdmin ? '/' : '/admin', () => { setSelectedWriteup(null); setShowAdmin(!showAdmin); })}
             className={`flex items-center gap-2 font-mono text-sm transition-colors ${showAdmin ? 'text-emerald-400' : 'text-slate-500 hover:text-emerald-400'}`}
           >
             <Unlock size={20} /> <span className="hidden md:inline">{showAdmin ? 'Close Admin' : 'Sudo Root'}</span>
@@ -52,24 +91,27 @@ export default function App() {
         </div>
       </nav>
 
-      {/* LOGIC ĐIỀU HƯỚNG MÀN HÌNH */}
       {selectedWriteup ? (
-        // Đang xem bài viết
-        <WriteupReader wu={selectedWriteup} onBack={() => setSelectedWriteup(null)} />
+        <WriteupReader wu={selectedWriteup} onBack={() => navigate('/writeups', () => { setSelectedWriteup(null); setExplorerView('writeups'); })} />
       ) : showAdmin ? (
-        // Đang mở khu vực Admin (Trọn màn hình)
         <AdminPanel
-          onAdd={handleAddNewWriteup}
+          onAdd={(newWu) => setWriteups([newWu, ...writeups])}
           writeups={writeups}
           setWriteups={setWriteups}
-          onBack={() => setShowAdmin(false)}
+          onBack={() => navigate('/', () => setShowAdmin(false))}
         />
       ) : (
-        // Màn hình trang chủ mặc định
         <>
           <Hero />
-          <WriteupsList writeups={writeups} isLoading={isLoadingDB} onView={setSelectedWriteup} />
-          <SecureContact />
+          {/* TRUYỀN STATE ĐIỀU HƯỚNG XUỐNG CHO LIST */}
+          <WriteupsList 
+            writeups={writeups} 
+            isLoading={isLoadingDB} 
+            currentView={explorerView}
+            setCurrentView={setExplorerView}
+            onView={(wu) => navigate('/reading', () => setSelectedWriteup(wu))} 
+            navigate={navigate}
+          />
         </>
       )}
     </div>
@@ -389,40 +431,172 @@ const Hero = () => (
   </section>
 );
 
-// --- DANH SÁCH BÀI VIẾT (Giữ nguyên) ---
-const WriteupsList = ({ writeups, isLoading, onView }) => (
-  <section className="py-16 md:py-24 bg-slate-900 border-t border-slate-800">
-    <div className="max-w-5xl mx-auto px-4 md:px-6">
-      <h2 className="text-xl md:text-2xl font-bold font-mono text-white flex items-center gap-2 mb-6 md:mb-8">
-        <Database className="text-emerald-400" /> SELECT * FROM writeups;
-      </h2>
-      {isLoading ? (
-        <div className="text-emerald-500 flex text-sm md:text-base"><Loader2 className="animate-spin mr-2" /> Đang kéo dữ liệu từ Database</div>
-      ) : (
-        <div className="grid gap-4 md:gap-6">
-          {writeups.map((wu) => (
-            <div key={wu._id || wu.id} className="bg-slate-950 border border-slate-800 p-4 md:p-6 rounded-lg flex flex-col md:flex-row justify-between shadow-xl hover:border-emerald-500/50 transition-colors">
-              <div className="mb-4 md:mb-0">
-                <p className="text-xs md:text-sm font-mono text-emerald-500 mb-1 md:mb-2">{wu.date} - {wu.type}</p>
-                <h3 className="text-base md:text-lg font-bold text-white break-words">{wu.title}</h3>
-                <div className="flex gap-2 mt-2 flex-wrap">
-                  {wu.tags?.map(tag => <span key={tag} className="text-[10px] md:text-xs border border-slate-700 px-2 py-1 rounded bg-slate-900 text-slate-400">#{tag}</span>)}
-                </div>
-              </div>
-              <button
-                onClick={() => onView(wu)}
-                className="w-full md:w-auto px-4 py-2 md:py-0 bg-slate-900 text-emerald-400 border border-emerald-900 rounded font-mono text-sm hover:bg-emerald-900/30 h-10 md:h-fit flex items-center gap-2 justify-center shrink-0"
-              >
-                Execute <Terminal size={14} />
+// --- KHU VỰC EXPLORE & QUẢN LÝ DANH SÁCH ---
+const WriteupsList = ({ writeups, isLoading, onView, currentView, setCurrentView, navigate }) => {
+  // --- LOGIC CHO PHẦN CONTACT (TÍCH HỢP SẴN) ---
+  const [message, setMessage] = useState('');
+  const [contactStatus, setContactStatus] = useState('');
+  const [cooldown, setCooldown] = useState(0);
+
+  // Quản lý đếm ngược 15 phút cooldown
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const lastSent = localStorage.getItem('lastPayloadSent');
+      if (lastSent) {
+        const timePassed = Date.now() - parseInt(lastSent, 10);
+        if (timePassed < 900000) setCooldown(900000 - timePassed);
+        else setCooldown(0);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Hàm chuyển category đồng bộ với URL hệ thống
+  const navigateToCategory = (view) => {
+    const path = view === 'menu' ? '/' : `/${view}`;
+    navigate(path, () => setCurrentView(view));
+  };
+
+  const handleContactSubmit = async (e) => {
+    e.preventDefault();
+    if (cooldown > 0) return;
+    setContactStatus('TRANSMITTING...');
+    try {
+      const res = await fetch('https://api.web3forms.com/submit', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ 
+          access_key: "56275818-1600-487e-bb39-ab2be95edf94", 
+          message, 
+          from_name: "ANONYMOUS_EXPLORER" 
+        }) 
+      });
+      if (res.ok) { 
+        setContactStatus('DELIVERED'); 
+        setMessage(''); 
+        localStorage.setItem('lastPayloadSent', Date.now().toString()); 
+        setCooldown(900000); 
+      }
+    } catch (err) { setContactStatus('ERROR'); }
+    setTimeout(() => setContactStatus(''), 5000);
+  };
+
+  // --- MÀN HÌNH 1: GIAO DIỆN EXPLORE MENU (ẢNH 2) ---
+  if (currentView === 'menu') {
+    return (
+      <section className="py-16 md:py-24 bg-slate-950 border-t border-slate-900 text-left relative overflow-hidden">
+        <div className="max-w-4xl mx-auto px-4 md:px-6 relative z-10">
+          <h2 className="text-xs md:text-sm font-mono text-slate-500 tracking-[0.2em] mb-6 uppercase">Explore</h2>
+          <div className="flex flex-col gap-4">
+            
+            {/* Chức năng 1: Writeups */}
+            <div className="bg-slate-900/30 backdrop-blur-sm border border-slate-800 rounded-xl p-5 md:p-6 hover:border-emerald-500/30 transition-all group shadow-lg">
+              <h3 className="text-lg md:text-xl text-slate-200 font-mono mb-1 group-hover:text-emerald-400 transition-colors">Writeups</h3>
+              <p className="text-[10px] md:text-xs text-slate-600 font-mono mb-3 uppercase">/WRITEUPS</p>
+              <p className="text-slate-400 font-mono text-sm mb-5">Click here to View my WriteUp (Published solve notes and CTF retrospectives).</p>
+              <button onClick={() => navigateToCategory('writeups')} className="px-4 py-2 rounded-full border border-emerald-900/50 bg-emerald-950/30 text-emerald-400 font-mono text-[10px] md:text-xs hover:bg-emerald-900/50 hover:border-emerald-500/50 transition-colors flex items-center gap-2 w-fit">
+                OPEN ~/WRITEUPS.URL
               </button>
             </div>
-          ))}
-        </div>
-      )}
-    </div>
-  </section>
-);
 
+            {/* Chức năng 2: Research */}
+            <div className="bg-slate-900/30 backdrop-blur-sm border border-slate-800 rounded-xl p-5 md:p-6 hover:border-emerald-500/30 transition-all group shadow-lg">
+              <h3 className="text-lg md:text-xl text-slate-200 font-mono mb-1 group-hover:text-emerald-400 transition-colors">Research</h3>
+              <p className="text-[10px] md:text-xs text-slate-600 font-mono mb-3 uppercase">/RESEARCH</p>
+              <p className="text-slate-400 font-mono text-sm mb-5">Click here to view my research (Deep dives into Digital Forensics & Incident Response).</p>
+              <button onClick={() => navigateToCategory('research')} className="px-4 py-2 rounded-full border border-emerald-900/50 bg-emerald-950/30 text-emerald-400 font-mono text-[10px] md:text-xs hover:bg-emerald-900/50 hover:border-emerald-500/50 transition-colors flex items-center gap-2 w-fit">
+                OPEN ~/RESEARCH.URL
+              </button>
+            </div>
+
+            {/* Chức năng 3: Contact (Gộp từ SecureContact) */}
+            <div className="bg-slate-900/30 backdrop-blur-sm border border-slate-800 rounded-xl p-5 md:p-6 hover:border-emerald-500/30 transition-all group shadow-lg">
+              <h3 className="text-lg md:text-xl text-slate-200 font-mono mb-1 group-hover:text-emerald-400 transition-colors">Contact</h3>
+              <p className="text-[10px] md:text-xs text-slate-600 font-mono mb-3 uppercase">/CONTACT</p>
+              <p className="text-slate-400 font-mono text-sm mb-5">Transmit an anonymous message directly to my terminal dashboard.</p>
+              <button onClick={() => navigateToCategory('contact')} className="px-4 py-2 rounded-full border border-emerald-900/50 bg-emerald-950/30 text-emerald-400 font-mono text-[10px] md:text-xs hover:bg-emerald-900/50 hover:border-emerald-500/50 transition-colors flex items-center gap-2 w-fit">
+                OPEN ~/CONTACT.URL
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // --- MÀN HÌNH 2: GIAO DIỆN CHI TIẾT (WRITEUPS / CONTACT / RESEARCH) ---
+  return (
+    <section className="py-16 md:py-24 bg-slate-900 border-t border-slate-800 min-h-[60vh] text-left relative">
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#10b9810a_1px,transparent_1px),linear-gradient(to_bottom,#10b9810a_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none"></div>
+
+      <div className="max-w-5xl mx-auto px-4 md:px-6 relative z-10">
+        <button onClick={() => navigateToCategory('menu')} className="mb-8 text-emerald-500/70 hover:text-emerald-400 flex items-center gap-2 font-mono text-sm transition-colors px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full w-fit shadow-md hover:bg-emerald-500/20">
+          <ArrowLeft size={16} /> Return to Explore
+        </button>
+        
+        {/* VIEW: DANH SÁCH BÀI VIẾT SQL STYLE */}
+        {currentView === 'writeups' && (
+          <>
+            <h2 className="text-xl md:text-2xl font-bold font-mono text-white flex items-center gap-2 mb-6 md:mb-8"><Database className="text-emerald-400" /> SELECT * FROM writeups;</h2>
+            {isLoading ? (
+              <div className="text-emerald-500 flex text-sm items-center font-mono"><Loader2 className="animate-spin mr-2" /> Accessing Secure Database...</div>
+            ) : (
+              <div className="grid gap-4 md:gap-6">
+                {writeups.map((wu) => (
+                  <div key={wu._id || wu.id} className="bg-slate-950 border border-slate-800 p-4 md:p-6 rounded-lg flex flex-col md:flex-row justify-between shadow-xl hover:border-emerald-500/50 transition-colors group">
+                    <div className="mb-4 md:mb-0">
+                      <p className="text-xs md:text-sm font-mono text-emerald-500/60 mb-1">{wu.date} - {wu.type}</p>
+                      <h3 className="text-base md:text-lg font-bold text-white group-hover:text-emerald-400 transition-colors">{wu.title}</h3>
+                      <div className="flex gap-2 mt-2 flex-wrap">
+                        {wu.tags?.map(tag => <span key={tag} className="text-[10px] border border-slate-700 px-2 py-1 rounded bg-slate-900 text-slate-400 font-mono">#{tag}</span>)}
+                      </div>
+                    </div>
+                    <button onClick={() => onView(wu)} className="w-full md:w-auto px-4 py-2 bg-slate-900 text-emerald-400 border border-emerald-900 rounded font-mono text-sm hover:bg-emerald-900/30 flex items-center gap-2 justify-center shrink-0 h-fit">
+                      Execute <Terminal size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* VIEW: FORM LIÊN HỆ ẨN DANH */}
+        {currentView === 'contact' && (
+          <div className="max-w-3xl mx-auto">
+            <h2 className="text-xl md:text-2xl font-bold text-emerald-400 mb-6 font-mono flex items-center gap-2">
+              <Mail className="text-emerald-400" /> ./contact_handler.sh --anonymous
+            </h2>
+            <form onSubmit={handleContactSubmit} className="bg-slate-950 p-6 md:p-8 rounded-lg border border-emerald-900/30 shadow-2xl space-y-4">
+              <textarea 
+                required rows="6" 
+                placeholder="Type your message to Krinoa terminal..." 
+                className="w-full bg-slate-900 p-4 rounded text-emerald-400 border border-slate-800 focus:border-emerald-500 outline-none font-mono transition-all resize-none shadow-inner" 
+                value={message} 
+                onChange={e => setMessage(e.target.value)} 
+                disabled={cooldown > 0}
+              ></textarea>
+              <button disabled={cooldown > 0} className="w-full p-4 bg-emerald-500/10 text-emerald-400 rounded-lg font-bold border border-emerald-500/30 hover:bg-emerald-500/20 transition-all uppercase tracking-widest disabled:opacity-50 flex justify-center gap-2 items-center">
+                {cooldown > 0 ? <><Lock size={16} /> SYSTEM_LOCKED ({Math.floor(cooldown/60000)}m)</> : <><Send size={16} /> Transmit Payload</>}
+              </button>
+              {contactStatus && <p className="text-center font-mono text-xs uppercase text-emerald-500 animate-pulse mt-4">{contactStatus}</p>}
+            </form>
+          </div>
+        )}
+
+        {/* VIEW: RESEARCH MODULE (DỰ PHÒNG) */}
+        {currentView === 'research' && (
+          <div className="flex flex-col items-center justify-center py-24 border border-dashed border-slate-700 rounded-xl bg-slate-950/50 shadow-2xl">
+            <Shield className="text-slate-700 mb-4 animate-pulse" size={64} />
+            <h2 className="text-xl font-bold font-mono text-slate-400 mb-2 uppercase tracking-tighter">Encrypted Module</h2>
+            <p className="text-slate-500 font-mono text-sm text-center px-4 max-w-sm">Hệ thống đang mã hóa dữ liệu nghiên cứu. <br/>Vui lòng quay lại sau!</p>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+};
 // --- BẢNG QUẢN TRỊ VIÊN (FULL SCREEN) ---
 const AdminPanel = ({ onAdd, writeups, setWriteups, onBack }) => {
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('adminToken'));
@@ -494,33 +668,33 @@ const AdminPanel = ({ onAdd, writeups, setWriteups, onBack }) => {
       });
   };
 
-  const handleDelete = (id) => {
-    if (!window.confirm("❗ CẢNH BÁO: Bạn có chắc chắn muốn xóa bài viết này không?")) return;
+  const handleDelete = async (id) => {
+    if (!window.confirm("❗ CẢNH BÁO: Bạn có chắc chắn muốn xóa bài viết này không? Hành động này không thể hoàn tác!")) return;
+    
     const token = localStorage.getItem('adminToken');
 
-    fetch(`https://project-3g8c.onrender.com/api/writeups/${id}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    })
-      .then(async (res) => {
-        // [BẢO VỆ MỚI]: Kiểm tra xem server có trả về HTML do lỗi không
-        const contentType = res.headers.get("content-type");
-        if (contentType && contentType.includes("text/html")) {
-           throw new Error("Lỗi Server: Backend chưa được cập nhật API xóa, hoặc sai đường dẫn!");
-        }
+    try {
+      const res = await fetch(`https://project-3g8c.onrender.com/api/writeups/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
 
-        if (res.status === 403 || res.status === 401) throw new Error("Hết phiên hoặc không đủ quyền!");
-        if (!res.ok) throw new Error("Lỗi không xác định từ máy chủ!");
-        
-        return res.json();
-      })
-      .then(() => {
-        setWriteups(prev => prev.filter(wu => (wu._id || wu.id) !== id));
-        alert("✅ Đã xóa bài viết thành công.");
-      })
-      .catch(err => alert("❌ THẤT BẠI: " + err.message));
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("text/html")) {
+         throw new Error("Lỗi Server Render: Máy chủ vẫn đang chạy code cũ, chưa cập nhật API xóa mới!");
+      }
+
+      const data = await res.json();
+
+      if (!res.ok || data.success === false) {
+         throw new Error(data.error || "Không thể xóa từ Database!");
+      }
+      setWriteups(prev => prev.filter(wu => (wu._id || wu.id) !== id));
+      alert("✅ " + data.message);
+
+    } catch (err) {
+      alert("❌ THẤT BẠI: " + err.message);
+    }
   };
 
   // NẾU CHƯA ĐĂNG NHẬP: HIỆN FORM LOGIN (FULL SCREEN)
@@ -608,125 +782,6 @@ const AdminPanel = ({ onAdd, writeups, setWriteups, onBack }) => {
             </div>
           ))}
         </div>
-      </div>
-    </section>
-  );
-};
-
-// --- GỬI MAIL (WEB3FORMS) (Giữ nguyên) ---
-const SecureContact = () => {
-  const [message, setMessage] = useState('');
-  const [status, setStatus] = useState('');
-  const [cooldown, setCooldown] = useState(0);
-
-  // Hook đếm ngược thời gian Cooldown
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const lastSent = localStorage.getItem('lastPayloadSent');
-      if (lastSent) {
-        const timePassed = Date.now() - parseInt(lastSent, 10);
-        const cooldownTime = 15 * 60 * 1000; // 15 phút (tính bằng mili-giây)
-
-        if (timePassed < cooldownTime) {
-          setCooldown(cooldownTime - timePassed);
-        } else {
-          setCooldown(0);
-          localStorage.removeItem('lastPayloadSent'); // Hết hạn thì dọn dẹp
-        }
-      }
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (cooldown > 0) {
-      setStatus('[-] COOLDOWN. HÃY CHỜ TRƯỚC KHI GỬI LẠI.');
-      setTimeout(() => setStatus(''), 3000);
-      return;
-    }
-
-    if (message.trim() === '') {
-      setStatus('[-] LỖI: KHÔNG THỂ GỬI PAYLOAD RỖNG.');
-      setTimeout(() => setStatus(''), 3000);
-      return;
-    }
-
-    setStatus('ĐANG GỬI ĐI DỮ LIỆU...');
-
-    const payload = {
-      access_key: "56275818-1600-487e-bb39-ab2be95edf94",
-      subject: "🚨 [Ẩn Danh] Có tin nhắn mới từ Portfolio!",
-      message: message,
-      from_name: "VIEWER" // Đánh dấu là người ẩn danh
-    };
-
-    try {
-      const res = await fetch('https://api.web3forms.com/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
-
-      if (data.success) {
-        setStatus('PAYLOAD DELIVERED. CHECK YOUR INBOX.');
-        setMessage('');
-
-        // Kích hoạt Cooldown 15 phút
-        localStorage.setItem('lastPayloadSent', Date.now().toString());
-        setCooldown(15 * 60 * 1000);
-      } else {
-        setStatus('LỖI ĐƯỜNG TRUYỀN: TỪ CHỐI KẾT NỐI.');
-      }
-    } catch (error) {
-      setStatus('LỖI KẾT NỐI MẠNG.');
-    }
-
-    setTimeout(() => setStatus(''), 5000);
-  };
-
-  // Hàm chuyển đổi mili-giây sang định dạng Phút:Giây (MM:SS)
-  const formatTime = (ms) => {
-    const minutes = Math.floor(ms / 60000);
-    const seconds = ((ms % 60000) / 1000).toFixed(0);
-    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-  };
-
-  return (
-    <section className="py-16 md:py-24 bg-slate-950 border-t border-slate-900">
-      <div className="max-w-3xl mx-auto px-4 md:px-6">
-        <h2 className="text-lg md:text-xl font-bold text-emerald-400 mb-6 font-mono flex items-center gap-2">
-          <Terminal size={18} /> ./send_message.sh
-        </h2>
-        <form onSubmit={handleSubmit} className="bg-slate-900/40 p-5 md:p-8 rounded-lg border border-slate-800 shadow-2xl space-y-4 md:space-y-6">
-          <textarea
-            required
-            rows="4"
-            placeholder="Nhập nội dung tin nhắn ẩn danh của bạn vào đây..."
-            className="w-full bg-slate-950 p-3 md:p-4 rounded text-emerald-400 border border-slate-800 focus:border-emerald-500 outline-none transition-colors text-sm md:text-base disabled:opacity-50"
-            value={message}
-            onChange={e => setMessage(e.target.value)}
-            disabled={cooldown > 0}
-          ></textarea>
-
-          <button
-            disabled={cooldown > 0}
-            className="w-full p-3 md:p-4 bg-emerald-500/10 text-emerald-400 rounded-lg font-bold border border-emerald-500/30 hover:bg-emerald-500/20 transition-all uppercase tracking-widest text-sm md:text-base disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
-          >
-            {/* Hiệu ứng đồng hồ đếm ngược trên nút bấm */}
-            {cooldown > 0 ? <><Lock size={16} /> BỊ KHÓA ({formatTime(cooldown)})</> : 'Transmit Data'}
-          </button>
-
-          {status && (
-            <p className={`text-center font-mono text-xs md:text-sm uppercase ${status.includes('LỖI') ? 'text-rose-500' : 'text-emerald-500'}`}>
-              {status}
-            </p>
-          )}
-        </form>
       </div>
     </section>
   );
