@@ -77,16 +77,21 @@ app.post('/api/writeups', verifyAdmin, async (req, res) => {
 
 app.delete('/api/writeups/:id', verifyAdmin, async (req, res) => {
     try {
-        const { id } = req.params;
-        const deletedWu = await Writeup.findByIdAndDelete(id);
-        
-        if (!deletedWu) {
-            return res.status(404).json({ error: "Không tìm thấy bài viết để xóa!" });
+        const id = req.params.id.trim();
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, error: "Định dạng ID bài viết không hợp lệ!" });
         }
+        const result = await Writeup.deleteOne({ _id: id });
+        if (result.deletedCount === 0) {
+            return res.status(404).json({ success: false, error: "Không tìm thấy bài viết trong Database (có thể đã bị xóa trước đó)!" });
+        }
+
+        res.status(200).json({ success: true, message: "Đã xóa tận gốc bài viết khỏi Database!" });
         
-        res.status(200).json({ message: "Đã xóa bài viết thành công khỏi Database!" });
     } catch (e) {
-        res.status(500).json({ error: "Lỗi Server khi thực hiện lệnh xóa" });
+        console.error("=> LỖI XÓA BÀI:", e);
+        res.status(500).json({ success: false, error: "Lỗi hệ thống khi tương tác với Database." });
     }
 });
 // ==========================================

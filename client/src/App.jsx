@@ -17,7 +17,7 @@ export default function App() {
   const [showAdmin, setShowAdmin] = useState(false);
 
   useEffect(() => {
-    fetch('https://project-3g8c.onrender.com/api/writeups')
+    fetch('https://project-3g8c.onrender.com/api/writeups', { cache: 'no-store' })
       .then(res => res.json())
       .then(data => {
         setWriteups(data);
@@ -25,7 +25,6 @@ export default function App() {
       })
       .catch(err => console.error("Lỗi lấy dữ liệu:", err));
   }, []);
-
   const handleAddNewWriteup = (newWriteup) => {
     setWriteups([newWriteup, ...writeups]);
   };
