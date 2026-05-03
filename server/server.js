@@ -75,10 +75,26 @@ app.post('/api/writeups', verifyAdmin, async (req, res) => {
     }
 });
 
+app.delete('/api/writeups/:id', verifyAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const deletedWu = await Writeup.findByIdAndDelete(id);
+        
+        if (!deletedWu) {
+            return res.status(404).json({ error: "Không tìm thấy bài viết để xóa!" });
+        }
+        
+        res.status(200).json({ message: "Đã xóa bài viết thành công khỏi Database!" });
+    } catch (e) {
+        res.status(500).json({ error: "Lỗi Server khi thực hiện lệnh xóa" });
+    }
+});
 // ==========================================
 // [ĐÃ BỔ SUNG] 6. KHỞI ĐỘNG SERVER
 // ==========================================
 const PORT = process.env.PORT || 5000;
+
+
 app.listen(PORT, () => {
     console.log(`=> BACKEND SERVER IS RUNNING ON PORT ${PORT}`);
 });
